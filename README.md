@@ -7,6 +7,7 @@
 ## 04 note-excel
 # 02my-work-record
 # 03my-software
+## 0301-shandowsocks
 # 04my-tips
 ## 0401-常用快捷键
  
