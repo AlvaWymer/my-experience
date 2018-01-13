@@ -1,0 +1,467 @@
+后台开发笔记——刘洋杨
+
+
+------------------------------------
+知识总结
+
+1)事件代理：
+	动态生成的元素 无法用选择器直接找到 需要根据他的已存在的父类去查找
+    $("#cnmedicineAliasName").on("click"," .delTr",function(){
+        //this表示触发事件的元素
+        alert(1);
+        var that = this;
+        var custom = $(that).parent().attr("custom");
+        var delTagName= $(that).parent();
+        var delTagShortName= $("#cnmedicineAliasShortName").find($("td[custom='"+custom+"']"));
+        delTagName.remove();
+        delTagShortName.remove();
+    })
+
+2)js时间格式化
+	日期显示的是 2017-12-22 23:48:29
+    需求的是 2017-12-22 23:48
+	来一个日期格式化函数解决
+
+    // 对Date的扩展，将 Date 转化为指定格式的String
+	// 月(M)、日(d)、小时(h)、分(m)、秒(s)、季度(q) 可以用 1-2 个占位符，
+	// 年(y)可以用 1-4 个占位符，毫秒(S)只能用 1 个占位符(是 1-3 位的数字)
+	// 例子：
+	// (new Date()).Format("yyyy-MM-dd hh:mm:ss.S") ==> 2006-07-02 08:09:04.423
+	// (new Date()).Format("yyyy-M-d h:m:s.S")      ==> 2006-7-2 8:9:4.18
+	Date.prototype.Format = function (fmt) { //author: meizz
+	    var o = {
+	        "M+": this.getMonth() + 1, //月份
+	        "d+": this.getDate(), //日
+	        "h+": this.getHours(), //小时
+	        "m+": this.getMinutes(), //分
+	        "s+": this.getSeconds(), //秒
+	        "q+": Math.floor((this.getMonth() + 3) / 3), //季度
+	        "S": this.getMilliseconds() //毫秒
+	    };
+	    if (/(y+)/.test(fmt)) fmt = fmt.replace(RegExp.$1, (this.getFullYear() + "").substr(4 - RegExp.$1.length));
+	    for (var k in o)
+	        if (new RegExp("(" + k + ")").test(fmt)) fmt = fmt.replace(RegExp.$1, (RegExp.$1.length == 1) ? (o[k]) : (("00" + o[k]).substr(("" + o[k]).length)));
+	    return fmt;
+	};    
+
+3)class 选择器绑定事件 只绑定了第一个 需要循环才能绑定所有的元素
+    $(".cnmedicineAliasNames").each(function(index, item){
+        console.log(item)
+        $(item).combobox('textbox').blur(function () {
+            alert(123);
+            var that = this;
+            var target= $(that).parent().parent().children("input").get(0);
+            if(commonVerification($(target), 50, "药品别名")){
+                //去找你的好基友
+                var custom = $(that).parent().parent().attr("custom");
+                var delTagShortName= $("#cnmedicineAliasShortName").find($("td[custom='"+custom+"']")).children("input").get(0);
+                var data = getJp($(target).textbox("getValue"));
+                $(delTagShortName).textbox("setValue",data);
+            };
+        });
+    })  
+-------------------------------------
+需求整理
+
+1)需求列表
+	1.所有字体背景颜色字体必须改成黑色，全站更改                    前端
+	2.订单信息                                                      订单表加字段 医生手机、医生备注
+	3.提示语修改
+	4.别名 最大剂量
+	5.运费和优惠计算
+	6.默认地址
+	7.订单列表排序
+	8.订单列表已取消前状态                                           订单表增加字段 取消前状态
+	9.用户管理  加一个关注时间
+	10.订单管理 加一个待收货状态                                     订单状态加一个
+	11.查看物流
+
+
+------------------------------------
+开发记录
+
+1)默认地址开发
+	日期时间：
+		开始时间：2018年1月3日09:59:11
+		完成时间：2018年1月3日14:47:03
+	
+	开发步骤：
+		1)、启动项目
+			mvn clean
+			mvn install -DskipTests -Pdev
+		2)、Debug with JRebel myTomcat
+			http://localhost:8080/manage-web/
+			admin
+			bshf.admin
+		3)、代码记录
+			//默认地址标签
+			 <c:if test="${djtodo.userType ==2 || djtodo.userType ==3 }">
+                <a href="javascript:setDefaultAddress();" class="easyui-linkbutton" id="defaultAddress">默认地址</a>
+    		 </c:if>
+   			 //功能函数
+   			 /** 取得医生或者诊所的默认地址*/
+		    function setDefaultAddress(){
+		        //收货人姓名
+		        $('#receiverName').textbox("setValue", '${djwxUser.name}');
+		        //手机号码
+		        $('#receiverMobile').textbox("setValue", '${djwxUser.mobile}');
+		        //省市区
+		        getProvinceView();
+		        //详细地址
+		        $('#address').textbox("setValue", '${djwxUser.mobile}');
+		    }
+		    /**医生默认省市区*/
+		    function getProvinceView() {
+		        var url = '<%=path%>/common/region/getByPID/';
+		        var provinceId =  ${djwxUser.provinceId};
+		        var cityId = ${djwxUser.cityId};
+		        var areaId =  ${djwxUser.areaId};
+		        $('#cityId').combobox('setValue', cityId);
+		        //加载省
+		        getProvince();
+		        $('#provinceId').combobox('setValue', provinceId);
+		        //加载市
+		        getCity(url);
+		        $('#cityId').combobox('setValue', cityId);
+		        //加载区
+		        getArea(url);
+		        $('#areaId').combobox('setValue', areaId);
+		    }
+
+		    //调整样式： 
+	    	 <div style="margin-top: 20px">
+	                <label >收货人信息</label>
+	                <c:if test="${djtodo.userType ==2 || djtodo.userType ==3 }">
+	                    <a href="javascript:setDefaultAddress();" class="easyui-linkbutton" id="defaultAddress">默认地址</a>
+	                </c:if>
+	                <hr>
+	        </div>
+				
+2)用户管理加一个关注时间开发
+	日期时间：
+		开始时间：2018年1月3日10:52:213
+		结束时间：2018年1月3日13:06:26
+	开发步骤:
+		需求理解：
+			列表放出关注时间 搜索加一个关注时间
+		代码记录：	
+			发现DjwxUserVO里面居然没有createTime没有 需要补一个字段  
+			项目重启才能生效啊 然后重启项目
+			/** 创建时间 */
+		    private Date createTime;
+		    /** 创建时间 */
+		    public Date getCreateTime() {
+		        return createTime;
+		    }
+		    public void setCreateTime(Date createTime) {
+		        this.createTime = createTime;
+		    }
+		
+			//搜索框需要起始时间
+			 <th>下单时间</th>
+		     <td>
+		        <input class="date-sty" type="text"  style="height:26px;width: 100px" onFocus="WdatePicker({maxDate:'#F{$dp.$D(\'endDate\')}',dateFmt:'yyyy-MM-dd'})"
+		               class="Wdate" id="beginDate" name="beginDate"/></td>
+		    <td>至</td>
+		    <td>
+		        <input class="date-sty" type="text" style="height:26px;width: 100px" onFocus="WdatePicker({minDate:'#F{$dp.$D(\'beginDate\')}',dateFmt:'yyyy-MM-dd'})"
+		               class="Wdate " name="endDate" id="endDate"/>
+		    </td>
+
+		    DjwxuserListIO
+		    @DateTimeFormat( pattern = "yyyy-MM-dd" )
+		    private Date beginDate;
+		    /** 下单查询结束时间*/
+		    @DateTimeFormat( pattern = "yyyy-MM-dd" )
+		    private Date endDate;
+
+		    public Date getBeginDate() {
+		        return beginDate;
+		    }
+
+		    public void setBeginDate(Date beginDate) {
+		        this.beginDate = beginDate;
+		    }
+
+		    public Date getEndDate() {
+		        return endDate;
+		    }
+
+		    public void setEndDate(Date endDate) {
+		        this.endDate = endDate;
+		    }
+
+		    mapper
+		     <if test="endDate != null">
+		        AND create_time &lt; #{endDate}
+		     </if>
+		     <if test="beginDate != null">
+		        AND create_time &gt; #{beginDate}
+		     </if>
+
+
+3)提示语修改开发
+	日期时间：
+		开始时间：2018年1月3日13:07:26
+		结束时间：2018年1月5日09:34:50
+	开发步骤：
+		需求理解：
+			患者 | 医生、诊所
+			配伍禁忌
+		代码记录：
+			/** 往表格填写一条数据逻辑判断*/
+	        function setDate(data) {
+	            //检测互斥
+	            //是否存在互斥
+	            var flag = false;
+	            var tabooName = '';
+	            _ajax(null,'<%=path%>/medicine/cnmedicine/getTabooListByCnmedicineName/'+data.name,function(rsc){
+	                if(rsc.length>0){
+	                    //有返回互斥数据
+	                    var $objName = $(".detailTrName");
+	                    for (var i = 0; i < $objName.length; i++) {
+	                        var objName = $($objName[i]).textbox("getValue");
+	                        if (objName != null || objName != '') {
+	                            for (var j = 0; j <rsc.length; j++) {
+	                                if(objName.indexOf(rsc[j])>=0 && rsc[j]!=""){
+	                                    tabooName+=objName+',';
+	                                    flag = true;
+	                                    break;
+	                                }
+	                            }
+	                        }
+	                    }
+	                }
+	            },false);
+	            if(flag) {
+	                var obj ={};
+	                //根据下单人类型来判读提示语
+	                if('${djtodo.userType}'==1) {
+	                    //患者
+	                    obj = {
+	                        default: true,
+	                        title: '配伍禁忌提示',
+	                        txt: data.name + '和' + tabooName + '违反了配伍禁忌,不能同时出现在同一处方中。',
+	                        type: 1,
+	                        button: "确定"
+	                    }
+	                    dialogOnlyTip(obj, function () {
+	                        $('.dialog-content').css({
+	                            width: 400 + 'px',
+	                            height: 200 + 'px'
+	                        })
+	                        $('#dialog').fadeIn(300);
+	                    });
+	                }else {
+	                    //医生
+	                    obj = {
+	                        default: true,
+	                        title: '配伍禁忌提示',
+	                        txt: data.name + '和' + tabooName + '违反了配伍禁忌,按规定不能同时出现在同一处方中,确定要继续添加吗。',
+	                        type: 1,
+	                        button: "确定"
+	                    }
+	                    dialog(obj, function () {
+	                        $('.dialog-content').css({
+	                            width: 400 + 'px',
+	                            height: 200 + 'px'
+	                        })
+	                        $('#dialog').fadeIn(300);
+
+	                    });
+	                    $("#query").on('click', function () {
+	                        $('#dialog').fadeOut(300);
+	                        $('#searchMedicine').focus();
+	                        createTrTd(data);
+	                    });
+	                }
+	            } else {
+	                createTrTd(data);
+	            }
+	        }
+
+			有毒药品
+				患者：患者处方中黑顺片剂量超出药典规定（10g），请与患者进行电话沟通取消订单。
+				医生：根据药典规定，1副药中附子的用药剂量不能超过10g，确定开方需要您核定后签章确认。
+
+			$(".detailTrQuantity").textbox({
+	            onChange: function (n, o) {
+	                var that = this;
+	                var quantity = $(that).textbox("getValue");
+	                //找这个真是累
+	                var maxDosage = $(that).parent().parent().find(".detailMaxDosage").val();
+	                if (quantity - 0 > maxDosage - 0 && maxDosage != '') {
+	                    //药品名称
+	                    var name = $(that).parent().parent().find(".detailTrName").textbox("getValue");
+	                    //药品单位
+	                    var unit = $(that).parent().parent().find(".detailTrUnit").textbox("getValue");
+	                    //超量提示
+	                    var txt='';
+	                    //根据下单人类型来判读提示语
+	                    if('${djorder.originType}'==1) {
+	                        txt = '患者处方中（'+ name +'）剂量超出药典规定（'+ maxDosage+ unit+'），请与患者进行电话沟通取消订单';
+	                    }else {
+	                        txt = '根据药典规定，1副药中（'+ name +'）的用药剂量不能超过（'+ maxDosage+ unit+'），确定开方需要您核定后签章确认。'
+	                    }
+	                    obj = {
+	                        default: true,
+	                        title: '配伍禁忌提示',
+	                        txt:txt,
+	                        type: 1,
+	                        button: "确定"
+	                    }
+	                    dialogOnlyTip(obj, function () {
+	                        $('.dialog-content').css({
+	                            width: 400 + 'px',
+	                            height: 200 + 'px'
+	                        })
+	                        $('#dialog').fadeIn(300);
+	                    });
+	                }
+	                getTotalMonunt();
+	            }
+	        });
+
+	        这段代码写的相当费劲
+
+4)最大剂量开发
+	日期时间：
+		开始时间：2018年1月5日09:38:15
+		结束时间：2018年1月5日10:55:16
+	开发步骤：
+	需求理解：
+		有毒剂量规定 最大剂量
+		有毒剂量规定，非必填选项，默认为空，长度不能超过5字，超出时候提示“长度不能超过5字。
+	代码记录：
+	 	保存、编辑、详情 
+        html、js(丢失焦点校验 保存校验)
+		jsp：
+			save
+				 <tr>
+	                <th> 最大剂量：</th>
+	                <td>
+	                    <input class="easyui-textbox" type="text" id="maxDosage" name="maxDosage" />
+	                    <div class="word_tip">不能为空</div>
+	                </td>
+	            </tr>
+	    js:
+	    数据校验
+	    引用的外部js文件 修改后需要清除缓
+	    丢失焦点校验
+	    //校验最大数量
+        $("#maxDosage").combobox('textbox').blur(function () {
+            //先格式化数据
+            formatNumber($("#maxDosage"),1);
+            //数量校验
+            commonVerificationLength($("#maxDosage"), 5, "最大剂量");
+        });
+        保存数据校验
+         //校验最大剂量
+        if(!commonVerificationLength($("#maxDosage"), 5, "最大剂量")){
+            return false;
+        }
+        	edit
+        	detail
+
+5)增加药品别名功能开发
+	日期时间：
+    	开始时间：2018年1月12日10:28:09
+    	结束时间：
+	开发步骤：
+    	需求理解：
+       		商品表和别名表1-n
+
+    	代码记录：
+       	 5-1)pdm新增表
+         
+         5-2)数据库更新
+            drop table if exists cnmedicine_alias;
+
+            /*==============================================================*/
+            /* Table: cnmedicine_alias                                      */
+            /*==============================================================*/
+            create table cnmedicine_alias
+            (
+               id                   int(11) not null auto_increment comment '主键 自增',
+               cnmedicine_id        int(11) not null  comment '中药id',
+               name                 varchar(100) not null comment '名称',
+               short_name           varchar(15) not null comment '简拼',
+               primary key (id)
+            )
+            ENGINE = InnoDB
+            charset = UTF8;
+
+            alter table cnmedicine_alias comment '中药别名表';
+       
+        5-3)生成po saveio listio vo dao mapper service serviceimpl 
+        5-4)新增页面和接口开发
+            5-4-1) cnmedicineSaveIO需要新增一个List<cnmedicine_aliasSaveIO>
+
+                /** 药品别名List */
+                List<CnmedicineAliasSaveIO> cnmedicineAliasSaveIOList;
+
+                public List<CnmedicineAliasSaveIO> getCnmedicineAliasSaveIOList() {
+                    return cnmedicineAliasSaveIOList;
+                }
+            
+                public void setCnmedicineAliasSaveIOList(List<CnmedicineAliasSaveIO> cnmedicineAliasSaveIOList) {
+                    this.cnmedicineAliasSaveIOList = cnmedicineAliasSaveIOList;
+                }
+            5-4-2)删除一组别名和简拼  	
+		        事件代理：
+		          动态生成的元素 无法用选择器直接找到 需要根据他的已存在的父类去查找
+		        $("#cnmedicineAliasName").on("click"," .delTr",function(){
+		            //this表示触发事件的元素
+		            alert(1);
+		            var that = this;
+		            var custom = $(that).parent().attr("custom");
+		            var delTagName= $(that).parent();
+		            var delTagShortName= $("#cnmedicineAliasShortName").find($("td[custom='"+custom+"']"));
+		            delTagName.remove();
+		            delTagShortName.remove();
+		        })
+		    5-4-3)保存别名
+		        if (ArrayUtils.isNotEmpty(cnmedicineAliasName)) {
+		            List<CnmedicineAliasSaveIO> cnmedicineAliasSaveIOList = new ArrayList<>();
+		            for (int i = 0; i < cnmedicineAliasName.length; i++) {
+		                if (StringUtils.isNotEmpty(cnmedicineAliasName[i])) {
+		                    CnmedicineAliasSaveIO cnmedicineAliasSaveIO = new CnmedicineAliasSaveIO();
+		                    cnmedicineAliasSaveIO.setName(cnmedicineAliasName[i]);
+		                    cnmedicineAliasSaveIO.setShortName(cnmedicineAliasShortName[i]);
+		                    cnmedicineAliasSaveIOList.add(cnmedicineAliasSaveIO);
+		                }
+		            }
+		            io.setCnmedicineAliasSaveIOList(cnmedicineAliasSaveIOList);
+		        }
+		    5-4-4)别名丢失焦点的时候需要来一个简称  
+         		//校验药品别名
+        		//class 选择器 只绑定了第一个 需要循环才能绑定所有的元素
+		        $(".cnmedicineAliasNames").each(function(index, item){
+		            console.log(item)
+		            $(item).combobox('textbox').blur(function () {
+		                alert(123);
+		                var that = this;
+		                var target= $(that).parent().parent().children("input").get(0);
+		                if(commonVerification($(target), 50, "药品别名")){
+		                    //去找你的好基友
+		                    var custom = $(that).parent().parent().attr("custom");
+		                    var delTagShortName= $("#cnmedicineAliasShortName").find($("td[custom='"+custom+"']")).children("input").get(0);
+		                    var data = getJp($(target).textbox("getValue"));
+		                    $(delTagShortName).textbox("setValue",data);
+		                };
+		            });
+		        })  
+		        	
+
+
+
+
+
+
+
+
+
+
+
+
+
